@@ -98,7 +98,12 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	    //renderer.registerDrawable(angleHUD);
 	    
 	    the_terrain = new Terrain();
+	    the_terrain.x = -renderer.viewWidth / 2;
+	    the_terrain.y = -renderer.viewHeight / 2;
+	    the_terrain.width = renderer.viewWidth;
+	    the_terrain.height = renderer.viewHeight;
 	    TerrainGenerator.generate(the_terrain);
+	    ExplosionController.getInstance().init(the_terrain);
 	    
 	    renderer.registerDrawable(the_terrain);
 	    
@@ -172,7 +177,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				ExplosionController.explode(the_terrain, real_xy[0], real_xy[1], 2, renderer);
+				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 2);
 				break;
 		}
 	}

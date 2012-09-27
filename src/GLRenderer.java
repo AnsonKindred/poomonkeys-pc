@@ -79,10 +79,22 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		for (int i = 0; i < drawables.size(); i++)
 		{
-			if (!drawables.get(i).didInit)
-				drawables.get(i).init(viewWidth, viewHeight);
-			drawables.get(i).update(this);
+			this.initDrawable(drawables.get(i));
+			
 			this.drawDrawable(drawables.get(i), gl);
+		}
+	}
+	
+	public void initDrawable(Drawable thing)
+	{
+		if (!thing.didInit)
+		{
+			thing.init(viewWidth, viewHeight);
+		}
+		
+		for (int i = 0; i < thing.drawables.size(); i++)
+		{
+			this.initDrawable(thing.drawables.get(i));
 		}
 	}
 
@@ -103,7 +115,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		for (int i = 0; i < thing.drawables.size(); i++)
 		{
-			thing.drawables.get(i).update(this);
 			this.drawDrawable(thing.drawables.get(i), gl);
 		}
 
