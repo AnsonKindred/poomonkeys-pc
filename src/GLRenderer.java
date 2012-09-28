@@ -45,6 +45,10 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		this.setSize(1800, 1000);
 
 		animator = new FPSAnimator(this, 60);
+	}
+	
+	public void start()
+	{
 		animator.start();
 	}
 
@@ -141,10 +145,14 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		if (!didInit)
 		{
+			PooMonkeysEngine.getInstance().init();
 			didInit = true;
 			for (int i = 0; i < drawables.size(); i++)
-				drawables.get(i).init(viewWidth, viewHeight);
-		} else
+			{
+				initDrawable(drawables.get(i));
+			}
+		} 
+		else
 		{
 			for (int i = 0; i < drawables.size(); i++)
 				drawables.get(i).reshape(x, y, (int) viewWidth,
