@@ -57,11 +57,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		drawables.add(d);
 	}
 
-	public void unregisterDrawable(Drawable d)
-	{
-		drawables.remove(d);
-	}
-
 	public void init(GLAutoDrawable d)
 	{
 		final GL2 gl = d.getGL().getGL2();
@@ -121,7 +116,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	{
 		gl.glPushMatrix();
 
-		gl.glTranslatef(thing.x, thing.y, 0);
+		gl.glTranslatef(thing.p.x, thing.p.y, 0);
 
 		if (thing.rotation != 0)
 		{
@@ -153,7 +148,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		gl.glMatrixMode(GL2.GL_PROJECTION);
 		gl.glLoadIdentity();
-		(new GLU()).gluOrtho2D(-viewWidth/2, viewWidth/2, -viewHeight/2, viewHeight/2);
+		(new GLU()).gluOrtho2D(0, viewWidth, 0, viewHeight);
 
 		gl.glMatrixMode(GL2.GL_MODELVIEW);
 		gl.glLoadIdentity();
@@ -170,8 +165,9 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		else
 		{
 			for (int i = 0; i < drawables.size(); i++)
-				drawables.get(i).reshape(x, y, (int) viewWidth,
-						(int) viewHeight);
+			{
+				drawables.get(i).reshape(x, y, (int) viewWidth,	(int) viewHeight);
+			}
 		}
 	}
 
@@ -185,8 +181,8 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 	public void screenToViewCoords(float[] xy)
 	{
-		float viewX = (xy[0] / screenWidth) * viewWidth - viewWidth / 2;
-		float viewY = -(xy[1] / screenHeight) * viewHeight + viewHeight / 2;
+		float viewX = (xy[0] / screenWidth) * viewWidth;
+		float viewY = viewHeight - (xy[1] / screenHeight) * viewHeight;
 		xy[0] = viewX;
 		xy[1] = viewY;
 	}

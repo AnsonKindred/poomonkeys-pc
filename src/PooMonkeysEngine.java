@@ -17,6 +17,7 @@ import poomonkeys.common.AimingHUD;
 import poomonkeys.common.ExplosionController;
 import poomonkeys.common.GLClickEvent;
 import poomonkeys.common.GLClickListener;
+import poomonkeys.common.PhysicsController;
 import poomonkeys.common.Player;
 import poomonkeys.common.Point2D;
 import poomonkeys.common.Shot;
@@ -105,8 +106,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	public void init()
 	{
 		the_terrain = new Terrain();
-	    the_terrain.x = -renderer.viewWidth / 2;
-	    the_terrain.y = -renderer.viewHeight / 2;
 	    the_terrain.width = renderer.viewWidth;
 	    the_terrain.height = renderer.viewHeight;
 	    TerrainGenerator.generate(the_terrain);
@@ -129,21 +128,25 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	public void fireShot() 
 	{
 		GLRenderer renderer = GLRenderer.getInstance();
+		PhysicsController physicsController = PhysicsController.getInstance();
 		gameState = STATE_FIRING_SHOT;
-		renderer.unregisterDrawable(angleHUD);
-		Shot shot = new Shot(players.get(currentPlayer), 0, angleHUD.getPower(), gravity.x, gravity.y, renderer.viewWidth, renderer.viewHeight);
+		angleHUD.removeFromGLEngine = true;
+		Shot shot = new Shot(players.get(currentPlayer), 0, angleHUD.getPower(), renderer.viewWidth, renderer.viewHeight);
 		players.get(currentPlayer).fireShot(shot);
 		renderer.registerDrawable(shot);
+		physicsController.addCollidable(shot);
 		shots.add(shot);
 	}
 
 	public void enemyFiredShot(int enemyID, float x, float y, float vx, float vy) 
 	{
 		GLRenderer renderer = GLRenderer.getInstance();
+		PhysicsController physicsController = PhysicsController.getInstance();
 		gameState = STATE_ENEMY_FIRING_SHOT;
-		Shot shot = new Shot(players.get(enemyID), 0, x, y, vx, vy, gravity.x, gravity.y, renderer.viewWidth, renderer.viewHeight);
+		Shot shot = new Shot(players.get(enemyID), 0, x, y, vx, vy, renderer.viewWidth, renderer.viewHeight);
 		players.get(enemyID).fireShot(shot);
 		renderer.registerDrawable(shot);
+		physicsController.addCollidable(shot);
 		shots.add(shot);
 	}
 	
@@ -182,7 +185,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5);
+				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.p.x, real_xy[1]-the_terrain.p.y, 5);
 				break;
 		}
 	}
