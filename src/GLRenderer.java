@@ -87,6 +87,21 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 			
 			this.drawDrawable(drawables.get(i), gl);
 		}
+		
+		this.removeDrawables(drawables);
+	}
+	
+	public void removeDrawables(ArrayList<Drawable> d)
+	{
+		for (int i = 0; i < d.size(); i++)
+		{
+			removeDrawables(d.get(i).drawables);
+			if(d.get(i).removeFromGLEngine)
+			{
+				d.remove(i);
+				i--;
+			}
+		}
 	}
 	
 	public void initDrawable(Drawable thing)

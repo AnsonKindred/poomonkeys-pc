@@ -182,7 +182,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 2);
+				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5);
 				break;
 		}
 	}
