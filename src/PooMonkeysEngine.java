@@ -12,7 +12,6 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
-
 import poomonkeys.common.AimingHUD;
 import poomonkeys.common.GLClickEvent;
 import poomonkeys.common.GLClickListener;
@@ -22,7 +21,6 @@ import poomonkeys.common.Point2D;
 import poomonkeys.common.Shot;
 import poomonkeys.common.SocketListener;
 import poomonkeys.common.SocketUtil;
-import poomonkeys.common.Tank;
 import poomonkeys.common.Terrain;
 import poomonkeys.common.TerrainGenerator;
 
@@ -187,7 +185,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				the_terrain.explodeCircle(real_xy[0]-the_terrain.p.x, real_xy[1]-the_terrain.p.y, 5);
+				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5);
 				break;
 		}
 	}

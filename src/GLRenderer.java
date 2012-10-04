@@ -121,7 +121,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	{
 		gl.glPushMatrix();
 
-		gl.glTranslatef(thing.p.x, thing.p.y, 0);
+		gl.glTranslatef(thing.x, thing.y, 0);
 
 		if (thing.rotation != 0)
 		{
