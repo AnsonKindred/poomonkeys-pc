@@ -22,6 +22,7 @@ import poomonkeys.common.Point2D;
 import poomonkeys.common.Shot;
 import poomonkeys.common.SocketListener;
 import poomonkeys.common.SocketUtil;
+import poomonkeys.common.Tank;
 import poomonkeys.common.Terrain;
 import poomonkeys.common.TerrainGenerator;
 
@@ -104,13 +105,15 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	}
 	
 	public void init()
-	{
+	{		
 		the_terrain = new Terrain();
 	    the_terrain.width = renderer.viewWidth;
 	    the_terrain.height = renderer.viewHeight;
 	    TerrainGenerator.generate(the_terrain);
 	    
 	    renderer.registerDrawable(the_terrain);
+	    
+		the_terrain.addTankRandom(players.get(0).tank);
 	}
 	
 	public void delete()
