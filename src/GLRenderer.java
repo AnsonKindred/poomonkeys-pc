@@ -54,7 +54,10 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 	public void registerDrawable(Drawable d)
 	{
-		drawables.add(d);
+		synchronized(drawables)
+		{
+			drawables.add(d);
+		}
 	}
 
 	public void init(GLAutoDrawable d)
@@ -76,25 +79,27 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		gl.glLoadIdentity();
 
-		for (int i = 0; i < drawables.size(); i++)
+		synchronized(drawables)
 		{
-			this.initDrawable(drawables.get(i));
+			this.removeDrawables(drawables);
 			
-			this.drawDrawable(drawables.get(i), gl);
+			for (int i = 0; i < drawables.size(); i++)
+			{
+				this.initDrawable(drawables.get(i));
+				
+				this.drawDrawable(drawables.get(i), gl);
+			}
 		}
-		
-		this.removeDrawables(drawables);
 	}
 	
 	public void removeDrawables(ArrayList<Drawable> d)
 	{
-		for (int i = 0; i < d.size(); i++)
+		for (int i = d.size()-1; i >= 0; i--)
 		{
 			removeDrawables(d.get(i).drawables);
 			if(d.get(i).removeFromGLEngine)
 			{
 				d.remove(i);
-				i--;
 			}
 		}
 	}

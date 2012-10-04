@@ -14,7 +14,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 
 import poomonkeys.common.AimingHUD;
-import poomonkeys.common.ExplosionController;
 import poomonkeys.common.GLClickEvent;
 import poomonkeys.common.GLClickListener;
 import poomonkeys.common.PhysicsController;
@@ -98,6 +97,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	    angleHUD.startButton.addGLClickListener(this);
 	    //renderer.registerDrawable(angleHUD);
 	    
+	    gameState = STATE_CHOOSE_ANGLE;
 	    gameState = STATE_TESTING;
 	    
 	    renderer.start();
@@ -109,7 +109,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	    the_terrain.width = renderer.viewWidth;
 	    the_terrain.height = renderer.viewHeight;
 	    TerrainGenerator.generate(the_terrain);
-	    ExplosionController.getInstance().init(the_terrain);
 	    
 	    renderer.registerDrawable(the_terrain);
 	}
@@ -185,7 +184,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				ExplosionController.getInstance().explode(real_xy[0]-the_terrain.p.x, real_xy[1]-the_terrain.p.y, 5);
+				the_terrain.explodeCircle(real_xy[0]-the_terrain.p.x, real_xy[1]-the_terrain.p.y, 5);
 				break;
 		}
 	}
