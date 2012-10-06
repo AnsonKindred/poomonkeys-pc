@@ -185,8 +185,12 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				PhysicsController.getInstance().addCollidable(players.get(0).tank);
-				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5);
+				PhysicsController physicsController = PhysicsController.getInstance();
+				if(!physicsController.hasCollidable(players.get(0).tank))
+				{
+					physicsController.addCollidable(players.get(0).tank);
+				}
+				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 3f);
 				break;
 		}
 	}
