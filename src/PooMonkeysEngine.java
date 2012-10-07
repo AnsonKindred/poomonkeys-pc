@@ -188,9 +188,10 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				PhysicsController physicsController = PhysicsController.getInstance();
 				if(!physicsController.hasCollidable(players.get(0).tank))
 				{
-					physicsController.addCollidable(players.get(0).tank);
+					//physicsController.addCollidable(players.get(0).tank);
 				}
-				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 3f);
+				//the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 8f);
+				the_terrain.dropDirt(real_xy[0], real_xy[1]);
 				break;
 		}
 	}
