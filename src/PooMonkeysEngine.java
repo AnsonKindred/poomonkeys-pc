@@ -186,11 +186,11 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				break;
 			case STATE_TESTING:
 				PhysicsController physicsController = PhysicsController.getInstance();
+				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5f);
 				if(!physicsController.hasCollidable(players.get(0).tank))
 				{
-					//physicsController.addCollidable(players.get(0).tank);
+					physicsController.addCollidable(players.get(0).tank);
 				}
-				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5f);
 				//the_terrain.dropDirt(real_xy[0], real_xy[1]);
 				break;
 		}
