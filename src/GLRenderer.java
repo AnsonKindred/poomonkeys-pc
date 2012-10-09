@@ -81,13 +81,20 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		synchronized(drawables)
 		{
-			this.removeDrawables(drawables);
-			
-			for (int i = 0; i < drawables.size(); i++)
+			for (int i = drawables.size()-1; i >= 0; i--)
 			{
-				this.initDrawable(drawables.get(i));
-				
-				this.drawDrawable(drawables.get(i), gl);
+				Drawable drawable = drawables.get(i);
+
+				removeDrawables(drawable.drawables);
+				if(drawable.removeFromGLEngine)
+				{
+					drawables.remove(i);
+				}
+				else
+				{
+					initDrawable(drawable);
+					drawDrawable(drawable, gl);
+				}
 			}
 		}
 	}
@@ -96,8 +103,9 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	{
 		for (int i = d.size()-1; i >= 0; i--)
 		{
-			removeDrawables(d.get(i).drawables);
-			if(d.get(i).removeFromGLEngine)
+			Drawable drawable = d.get(i);
+			removeDrawables(drawable.drawables);
+			if(drawable.removeFromGLEngine)
 			{
 				d.remove(i);
 			}
@@ -139,6 +147,16 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		gl.glPopMatrix();
 	}
+	
+	public void reshapeDrawables(ArrayList<Drawable> d)
+	{
+		for (int i = 0; i < d.size(); i++)
+		{
+			Drawable drawable = d.get(i);
+			drawable.reshape(viewWidth, viewHeight);
+			reshapeDrawables(drawable.drawables);
+		}
+	}
 
 	public void reshape(GLAutoDrawable d, int x, int y, int width, int height)
 	{
@@ -169,10 +187,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		} 
 		else
 		{
-			for (int i = 0; i < drawables.size(); i++)
-			{
-				drawables.get(i).reshape(x, y, (int) viewWidth,	(int) viewHeight);
-			}
+			reshapeDrawables(drawables);
 		}
 	}
 
