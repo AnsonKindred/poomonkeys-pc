@@ -1,4 +1,9 @@
+import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.ListIterator;
+
+import javax.media.opengl.GL;
 import javax.media.opengl.GL2;
 import javax.media.opengl.GLAutoDrawable;
 import javax.media.opengl.GLCapabilities;
@@ -8,6 +13,7 @@ import javax.media.opengl.awt.GLCanvas;
 import javax.media.opengl.glu.GLU;
 
 import poomonkeys.common.Drawable;
+import poomonkeys.common.Geometry;
 import poomonkeys.common.Renderer;
 
 import com.jogamp.opengl.util.FPSAnimator;
@@ -67,6 +73,13 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		gl.glBlendFunc(GL2.GL_SRC_ALPHA, GL2.GL_ONE_MINUS_SRC_ALPHA);
 		gl.glEnable(GL2.GL_BLEND);
+		
+		boolean VBOsupported = gl.isFunctionAvailable("glGenBuffersARB") &&
+                gl.isFunctionAvailable("glBindBufferARB") &&
+                gl.isFunctionAvailable("glBufferDataARB") &&
+                gl.isFunctionAvailable("glDeleteBuffersARB");
+		
+		System.out.println("VBO Supported: " + VBOsupported);
 	}
 
 	public void display(GLAutoDrawable d)
@@ -75,86 +88,104 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		timeSinceLastDraw = System.currentTimeMillis() - lastDrawTime;
 		lastDrawTime = System.currentTimeMillis();
 		gl.glClear(GL2.GL_COLOR_BUFFER_BIT | GL2.GL_DEPTH_BUFFER_BIT);
-		gl.glActiveTexture(GL2.GL_TEXTURE0);
+		//gl.glActiveTexture(GL2.GL_TEXTURE0);
 
 		gl.glLoadIdentity();
 
 		synchronized(drawables)
 		{
-			for (int i = drawables.size()-1; i >= 0; i--)
+			ListIterator<Drawable> itr = drawables.listIterator();
+			
+			while(itr.hasNext())
 			{
-				Drawable drawable = drawables.get(i);
-
-				removeDrawables(drawable.drawables);
+				Drawable drawable = itr.next();
+				//_removeDrawables(drawable.drawables);
 				if(drawable.removeFromGLEngine)
 				{
-					drawables.remove(i);
+					itr.remove();
 				}
 				else
 				{
-					initDrawable(drawable);
-					drawDrawable(drawable, gl);
+					_drawDrawable(drawable, gl);
 				}
 			}
 		}
 	}
-	
-	public void removeDrawables(ArrayList<Drawable> d)
+
+	private void _drawDrawable(Drawable thing, GL2 gl)
 	{
-		for (int i = d.size()-1; i >= 0; i--)
-		{
-			Drawable drawable = d.get(i);
-			removeDrawables(drawable.drawables);
-			if(drawable.removeFromGLEngine)
-			{
-				d.remove(i);
-			}
-		}
-	}
-	
-	public void initDrawable(Drawable thing)
-	{
+		
 		if (!thing.didInit)
 		{
 			thing.init(viewWidth, viewHeight);
+			
+			if(thing.geometry != null && thing.geometry.needsCompile && thing.geometry.vertices != null)
+			{
+				thing.geometry.needsCompile = false;
+			
+				int bytesPerFloat = Float.SIZE / Byte.SIZE;
+				
+			    int numBytes = thing.geometry.vertices.length * bytesPerFloat;
+			    
+				IntBuffer vertexBufferID = IntBuffer.allocate(1);
+				gl.glGenBuffers(1, vertexBufferID);
+				thing.geometry.vertexBufferID = vertexBufferID.get(0);
+				
+				gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, thing.geometry.vertexBufferID);
+				gl.glBufferData(GL2.GL_ARRAY_BUFFER, numBytes, thing.geometry.vertexBuffer, GL2.GL_STATIC_DRAW);
+				gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, 0);
+			}
 		}
 		
-		for (int i = 0; i < thing.drawables.size(); i++)
-		{
-			this.initDrawable(thing.drawables.get(i));
-		}
-	}
-
-	public void drawDrawable(Drawable thing, GL2 gl)
-	{
 		gl.glPushMatrix();
 
-		gl.glTranslatef(thing.x, thing.y, 0);
+		gl.glTranslatef(thing.p[0], thing.p[1], 0);
 
 		if (thing.rotation != 0)
 		{
 			gl.glRotatef(thing.rotation, 0, 0, 1);
 		}
-		if (thing.baseGeometry != null)
+		if (thing.scale.x != 1 || thing.scale.y != 1)
 		{
-			this.render(gl, thing.drawMode, thing);
+			gl.glScalef(thing.scale.x, thing.scale.y, 0);
+		}
+		
+		if (thing.vertices != null)
+		{
+			_render(gl, thing.drawMode, thing);
+		}
+		if (thing.geometry != null && thing.geometry.vertices != null)
+		{
+			_render(gl, thing.geometry.drawMode, thing.geometry);
 		}
 
-		for (int i = 0; i < thing.drawables.size(); i++)
+		ListIterator<Drawable> itr = thing.drawables.listIterator();
+		
+		while(itr.hasNext())
 		{
-			this.drawDrawable(thing.drawables.get(i), gl);
+			Drawable drawable = itr.next();
+			if(drawable.removeFromGLEngine)
+			{
+				itr.remove();
+			}
+			else
+			{
+				this._drawDrawable(drawable, gl);
+			}
 		}
 
 		gl.glPopMatrix();
 	}
 	
-	public void reshapeDrawables(ArrayList<Drawable> d)
+	private void _reshapeDrawables(ArrayList<Drawable> d)
 	{
-		for (int i = 0; i < d.size(); i++)
+		ListIterator<Drawable> itr = d.listIterator();
+		
+		while(itr.hasNext())
 		{
-			Drawable drawable = d.get(i);
+			Drawable drawable = itr.next();
 			drawable.reshape(viewWidth, viewHeight);
-			reshapeDrawables(drawable.drawables);
+			_reshapeDrawables(drawable.drawables);
 		}
 	}
 
@@ -180,23 +211,36 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		{
 			PooMonkeysEngine.getInstance().init();
 			didInit = true;
-			for (int i = 0; i < drawables.size(); i++)
-			{
-				initDrawable(drawables.get(i));
-			}
 		} 
 		else
 		{
-			reshapeDrawables(drawables);
+			_reshapeDrawables(drawables);
 		}
 	}
+	
+	public void _render(GL2 gl, int draw_mode, Geometry geometry)
+	{
+		gl.glColor3f(0, 1, 0);
+		if(geometry.vertexBufferID == 0) return;
+		
+		gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, geometry.vertexBufferID);
+		gl.glVertexPointer(3, GL.GL_FLOAT, 0, 0);
+		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
+		gl.glDrawArrays(draw_mode, 0, geometry.getNumPoints());
+		gl.glDisableClientState(GL2.GL_VERTEX_ARRAY);
+		gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, 0);
+	}
 
-	public void render(GL2 gl, int draw_mode, Drawable thing)
+	public void _render(GL2 gl, int draw_mode, Drawable thing)
 	{
 		gl.glColor3f(1, 1, 1);
+		if(thing.vertexBuffer == null) return;
+		
+		gl.glVertexPointer(3, GL.GL_FLOAT, 0, thing.vertexBuffer);
 		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
-		gl.glVertexPointer(3, GL2.GL_FLOAT, 0, thing.getGeometry());
 		gl.glDrawArrays(draw_mode, 0, thing.getNumPoints());
+		gl.glDisableClientState(GL2.GL_VERTEX_ARRAY);
+		gl.glBindBuffer(GL2.GL_ARRAY_BUFFER, 0);
 	}
 
 	public void screenToViewCoords(float[] xy)

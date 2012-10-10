@@ -105,8 +105,8 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	public void init()
 	{		
 		the_terrain = new Terrain();
-	    the_terrain.width = renderer.viewWidth;
-	    the_terrain.height = renderer.viewHeight;
+	    the_terrain.setWidth(renderer.viewWidth);
+	    the_terrain.setHeight(renderer.viewHeight);
 	    TerrainGenerator.generate(the_terrain);
 	    
 	    renderer.registerDrawable(the_terrain);
@@ -186,7 +186,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				break;
 			case STATE_TESTING:
 				PhysicsController physicsController = PhysicsController.getInstance();
-				the_terrain.explodeCircle(real_xy[0]-the_terrain.x, real_xy[1]-the_terrain.y, 5f);
+				the_terrain.explodeCircle(real_xy[0]-the_terrain.p[0], real_xy[1]-the_terrain.p[1], 5f);
 				if(!physicsController.hasCollidable(players.get(0).tank))
 				{
 					physicsController.addCollidable(players.get(0).tank);
