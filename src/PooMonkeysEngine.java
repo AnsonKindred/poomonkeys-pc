@@ -13,8 +13,11 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import poomonkeys.common.AimingHUD;
+import poomonkeys.common.DirtGeometry;
 import poomonkeys.common.GLClickEvent;
 import poomonkeys.common.GLClickListener;
+import poomonkeys.common.GameEngine;
+import poomonkeys.common.Geometry;
 import poomonkeys.common.PhysicsController;
 import poomonkeys.common.Player;
 import poomonkeys.common.Point2D;
@@ -24,13 +27,8 @@ import poomonkeys.common.SocketUtil;
 import poomonkeys.common.Terrain;
 import poomonkeys.common.TerrainGenerator;
 
-public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMotionListener, ActionListener, SocketListener, GLClickListener
+public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMotionListener, ActionListener, SocketListener, GLClickListener, GameEngine
 {
-
-	static final int STATE_CHOOSE_ANGLE = 0;
-	static final int STATE_FIRING_SHOT = 1;
-	static final int STATE_ENEMY_FIRING_SHOT = 2;
-	static final int STATE_TESTING = 3;
 	
 	public ArrayList<Player> players = new ArrayList<Player>();
 	int gameState = STATE_CHOOSE_ANGLE;
@@ -44,9 +42,15 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	JMenuItem hostAGame, connectToAGame;
 
 	GLRenderer renderer = null;
+	PhysicsController physicsController = null;
+	
 	JFrame the_frame;
 	
-	Terrain the_terrain;
+	private Terrain the_terrain;
+
+	private ArrayList<Geometry> geometries = new ArrayList<Geometry>();
+	private int numSimpleMovables;
+	private float[] simpleMovables = new float[MAX_MOVABLES * ITEMS_PER_MOVABLE];
 	
 	static PooMonkeysEngine engine = null;
 	
@@ -104,7 +108,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	
 	public void init()
 	{		
-		the_terrain = new Terrain();
+		the_terrain = new Terrain(this);
 	    the_terrain.setWidth(renderer.viewWidth);
 	    the_terrain.setHeight(renderer.viewHeight);
 	    TerrainGenerator.generate(the_terrain);
@@ -112,6 +116,8 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	    renderer.registerDrawable(the_terrain);
 	    
 		the_terrain.addTankRandom(players.get(0).tank);
+		
+		physicsController = new PhysicsController(this);
 	}
 	
 	public void delete()
@@ -128,7 +134,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	public void fireShot() 
 	{
 		GLRenderer renderer = GLRenderer.getInstance();
-		PhysicsController physicsController = PhysicsController.getInstance();
 		gameState = STATE_FIRING_SHOT;
 		angleHUD.removeFromGLEngine = true;
 		Shot shot = new Shot(players.get(currentPlayer), 0, angleHUD.getPower(), renderer.viewWidth, renderer.viewHeight);
@@ -141,7 +146,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	public void enemyFiredShot(int enemyID, float x, float y, float vx, float vy) 
 	{
 		GLRenderer renderer = GLRenderer.getInstance();
-		PhysicsController physicsController = PhysicsController.getInstance();
 		gameState = STATE_ENEMY_FIRING_SHOT;
 		Shot shot = new Shot(players.get(enemyID), 0, x, y, vx, vy, renderer.viewWidth, renderer.viewHeight);
 		players.get(enemyID).fireShot(shot);
@@ -185,8 +189,10 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 				angleHUD.click(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
 				break;
 			case STATE_TESTING:
-				PhysicsController physicsController = PhysicsController.getInstance();
 				the_terrain.explodeCircle(real_xy[0]-the_terrain.p[0], real_xy[1]-the_terrain.p[1], 5f);
+				float[] f = new float[3];
+				f[0] = real_xy[0]; f[1] = real_xy[1]; f[2] = 10;
+				physicsController.pointForces.add(f);
 				if(!physicsController.hasCollidable(players.get(0).tank))
 				{
 					physicsController.addCollidable(players.get(0).tank);
@@ -276,6 +282,93 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 		if(evt.getSource() == angleHUD.startButton)
 		{
 			fireShot();
+		}
+	}
+
+	@Override
+	public void addMovable(float x, float y, Geometry geom) 
+	{
+		synchronized(movableLock)
+		{
+			int geomID = getGeometryID(geom);
+			int dirt_index = (int) (numSimpleMovables*ITEMS_PER_MOVABLE);
+			
+			simpleMovables[dirt_index+X] = x;         // x
+			simpleMovables[dirt_index+Y] = y;         // y
+			simpleMovables[dirt_index+VX] = 0;        // vx
+			simpleMovables[dirt_index+VY] = 0;        // vy
+			simpleMovables[dirt_index+M] = 1;         // vy
+			simpleMovables[dirt_index+VOLUME] = 0;    // volume, gets set later
+			simpleMovables[dirt_index+GEOM] = geomID; // geometry id
+	
+			numSimpleMovables++; // increment the number of dirts
+		}
+	}
+	
+	@Override
+	public int getGeometryID(Geometry geom) 
+	{
+		for(int i = 0; i < geometries.size(); i++)
+		{
+			if(geometries.get(i) == geom)
+			{
+				return i;
+			}
+		}
+		geometries.add(geom);
+		return geometries.size()-1;
+	}
+	
+	@Override
+	public Geometry getGeometry(int id)
+	{
+		return geometries.get(id);
+	}
+
+	@Override
+	public boolean removeMovable(int i) 
+	{
+		synchronized(movableLock)
+		{
+			if(numSimpleMovables <= i) return false;
+			
+			if(i == numSimpleMovables-1)
+			{
+				numSimpleMovables--;
+				return true;
+			}
+			
+			int dirt_index = (i*ITEMS_PER_MOVABLE);
+			int last_dirt_index = (int) ((numSimpleMovables-1)*ITEMS_PER_MOVABLE);
+			
+			for(int d = 0; d < ITEMS_PER_MOVABLE; d++)
+			{
+				simpleMovables[dirt_index + d] = simpleMovables[last_dirt_index + d];
+			}
+			
+			numSimpleMovables--;
+			return true;
+		}
+	}
+
+	@Override
+	public float[] getMovables() 
+	{
+		return simpleMovables;
+	}
+
+	@Override
+	public Terrain getTerrain() 
+	{
+		return the_terrain;
+	}
+	
+	@Override
+	public int getNumMovables()
+	{
+		synchronized(movableLock)
+		{
+			return numSimpleMovables;
 		}
 	}
 
