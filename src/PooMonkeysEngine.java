@@ -18,6 +18,7 @@ import poomonkeys.common.GLClickEvent;
 import poomonkeys.common.GLClickListener;
 import poomonkeys.common.GameEngine;
 import poomonkeys.common.Geometry;
+import poomonkeys.common.Movable;
 import poomonkeys.common.PhysicsController;
 import poomonkeys.common.Player;
 import poomonkeys.common.Point2D;
@@ -48,9 +49,8 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	
 	private Terrain the_terrain;
 
-	private ArrayList<Geometry> geometries = new ArrayList<Geometry>();
-	private int numSimpleMovables;
-	private float[] simpleMovables = new float[MAX_MOVABLES * ITEMS_PER_MOVABLE];
+	public ArrayList<Geometry> instanceGeometries = new ArrayList<Geometry>();
+	private ArrayList<Movable[]> movables = new ArrayList<Movable[]>();
 	
 	static PooMonkeysEngine engine = null;
 	
@@ -203,32 +203,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	}
 
 	@Override
-	public void mouseClicked(MouseEvent e) 
-	{
-	}
-	
-	@Override
-	public void mouseMoved(MouseEvent arg0){}
-	@Override
-	public void mouseEntered(MouseEvent arg0) {}
-	@Override
-	public void mouseExited(MouseEvent arg0) {}
-	@Override
-	public void mousePressed(MouseEvent arg0) {}
-	@Override
-	public void windowActivated(WindowEvent arg0) {}
-	@Override
-	public void windowClosed(WindowEvent arg0) {}
-	@Override
-	public void windowDeactivated(WindowEvent arg0) {}
-	@Override
-	public void windowDeiconified(WindowEvent arg0) {}
-	@Override
-	public void windowIconified(WindowEvent arg0) {}
-	@Override
-	public void windowOpened(WindowEvent arg0) {}
-
-	@Override
 	public void actionPerformed(ActionEvent e) 
 	{
 		String action = ((JMenuItem)e.getSource()).getName();
@@ -290,71 +264,71 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	{
 		synchronized(movableLock)
 		{
-			int geomID = getGeometryID(geom);
-			int dirt_index = (int) (numSimpleMovables*ITEMS_PER_MOVABLE);
+			if(geom.geometryID == -1)
+			{
+				instanceGeometries.add(geom);
+				movables.add(new Movable[MAX_MOVABLES]);
+				geom.geometryID = instanceGeometries.size()-1;
+			}
 			
-			simpleMovables[dirt_index+X] = x;         // x
-			simpleMovables[dirt_index+Y] = y;         // y
-			simpleMovables[dirt_index+VX] = 0;        // vx
-			simpleMovables[dirt_index+VY] = 0;        // vy
-			simpleMovables[dirt_index+M] = 1;         // vy
-			simpleMovables[dirt_index+VOLUME] = 0;    // volume, gets set later
-			simpleMovables[dirt_index+GEOM] = geomID; // geometry id
-	
-			numSimpleMovables++; // increment the number of dirts
+			Movable movable = new Movable();
+			movable.x = x;
+			movable.y = y;
+			movable.geometryID = geom.geometryID; // geometry id
+			
+			movables.get(geom.geometryID)[geom.num_instances] = movable;
+			geom.num_instances++;
+		}
+	}
+
+	@Override
+	public boolean removeMovable(int g, int i) 
+	{
+		synchronized(movableLock)
+		{
+			Movable[] instances = movables.get(g);
+			Geometry geometry = instanceGeometries.get(g);
+			
+			if(geometry.num_instances <= i) 
+			{
+				System.out.println("Trying to delete past the end of list");
+				return false;
+			}
+			
+			geometry.num_instances--;
+			instances[i] = instances[geometry.num_instances];
+			instances[geometry.num_instances] = null;
+			
+			return true;
 		}
 	}
 	
 	@Override
 	public int getGeometryID(Geometry geom) 
 	{
-		for(int i = 0; i < geometries.size(); i++)
+		for(int i = 0; i < instanceGeometries.size(); i++)
 		{
-			if(geometries.get(i) == geom)
+			if(instanceGeometries.get(i) == geom)
 			{
 				return i;
 			}
 		}
-		geometries.add(geom);
-		return geometries.size()-1;
+		return -1;
 	}
 	
 	@Override
 	public Geometry getGeometry(int id)
 	{
-		return geometries.get(id);
+		return instanceGeometries.get(id);
 	}
 
 	@Override
-	public boolean removeMovable(int i) 
+	public ArrayList<Movable[]> getMovables() 
 	{
 		synchronized(movableLock)
 		{
-			if(numSimpleMovables <= i) return false;
-			
-			if(i == numSimpleMovables-1)
-			{
-				numSimpleMovables--;
-				return true;
-			}
-			
-			int dirt_index = (i*ITEMS_PER_MOVABLE);
-			int last_dirt_index = (int) ((numSimpleMovables-1)*ITEMS_PER_MOVABLE);
-			
-			for(int d = 0; d < ITEMS_PER_MOVABLE; d++)
-			{
-				simpleMovables[dirt_index + d] = simpleMovables[last_dirt_index + d];
-			}
-			
-			numSimpleMovables--;
-			return true;
+			return movables;
 		}
-	}
-
-	@Override
-	public float[] getMovables() 
-	{
-		return simpleMovables;
 	}
 
 	@Override
@@ -362,14 +336,28 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	{
 		return the_terrain;
 	}
-	
+
 	@Override
-	public int getNumMovables()
-	{
-		synchronized(movableLock)
-		{
-			return numSimpleMovables;
-		}
-	}
+	public void mouseClicked(MouseEvent e){}
+	@Override
+	public void mouseMoved(MouseEvent arg0){}
+	@Override
+	public void mouseEntered(MouseEvent arg0) {}
+	@Override
+	public void mouseExited(MouseEvent arg0) {}
+	@Override
+	public void mousePressed(MouseEvent arg0) {}
+	@Override
+	public void windowActivated(WindowEvent arg0) {}
+	@Override
+	public void windowClosed(WindowEvent arg0) {}
+	@Override
+	public void windowDeactivated(WindowEvent arg0) {}
+	@Override
+	public void windowDeiconified(WindowEvent arg0) {}
+	@Override
+	public void windowIconified(WindowEvent arg0) {}
+	@Override
+	public void windowOpened(WindowEvent arg0) {}
 
 }
