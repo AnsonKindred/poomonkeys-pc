@@ -48,9 +48,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	JFrame the_frame;
 	
 	private Terrain the_terrain;
-
-	public ArrayList<Geometry> instanceGeometries = new ArrayList<Geometry>();
-	private ArrayList<Movable[]> movables = new ArrayList<Movable[]>();
 	
 	static PooMonkeysEngine engine = null;
 	
@@ -108,7 +105,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	
 	public void init()
 	{		
-		the_terrain = new Terrain(this);
+		the_terrain = new Terrain(this, renderer);
 	    the_terrain.setWidth(renderer.viewWidth);
 	    the_terrain.setHeight(renderer.viewHeight);
 	    TerrainGenerator.generate(the_terrain);
@@ -117,7 +114,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 	    
 		the_terrain.addTankRandom(players.get(0).tank);
 		
-		physicsController = new PhysicsController(this);
+		physicsController = new PhysicsController(this, renderer);
 	}
 	
 	public void delete()
@@ -256,78 +253,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 		if(evt.getSource() == angleHUD.startButton)
 		{
 			fireShot();
-		}
-	}
-
-	@Override
-	public void addMovable(float x, float y, Geometry geom) 
-	{
-		synchronized(movableLock)
-		{
-			if(geom.geometryID == -1)
-			{
-				instanceGeometries.add(geom);
-				movables.add(new Movable[MAX_MOVABLES]);
-				geom.geometryID = instanceGeometries.size()-1;
-			}
-			
-			Movable movable = new Movable();
-			movable.x = x;
-			movable.y = y;
-			movable.geometryID = geom.geometryID; // geometry id
-			
-			movables.get(geom.geometryID)[geom.num_instances] = movable;
-			geom.num_instances++;
-		}
-	}
-
-	@Override
-	public boolean removeMovable(int g, int i) 
-	{
-		synchronized(movableLock)
-		{
-			Movable[] instances = movables.get(g);
-			Geometry geometry = instanceGeometries.get(g);
-			
-			if(geometry.num_instances <= i) 
-			{
-				System.out.println("Trying to delete past the end of list");
-				return false;
-			}
-			
-			geometry.num_instances--;
-			instances[i] = instances[geometry.num_instances];
-			instances[geometry.num_instances] = null;
-			
-			return true;
-		}
-	}
-	
-	@Override
-	public int getGeometryID(Geometry geom) 
-	{
-		for(int i = 0; i < instanceGeometries.size(); i++)
-		{
-			if(instanceGeometries.get(i) == geom)
-			{
-				return i;
-			}
-		}
-		return -1;
-	}
-	
-	@Override
-	public Geometry getGeometry(int id)
-	{
-		return instanceGeometries.get(id);
-	}
-
-	@Override
-	public ArrayList<Movable[]> getMovables() 
-	{
-		synchronized(movableLock)
-		{
-			return movables;
 		}
 	}
 

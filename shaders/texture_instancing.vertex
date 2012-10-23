@@ -1,0 +1,29 @@
+uniform mat3 projection;
+attribute vec3 vertex;
+
+uniform samplerBuffer positionSampler;
+uniform int positionSamplerOffset;
+
+// Fetches the position from the texture buffer bound to positionSampler
+float positionFetch(int index)
+{
+	index = index + positionSamplerOffset;
+	// each set of 4 position elements (2 xy pairs) is represented by a single RGBA vector
+	int item_index = int(index/4);
+	// use the remainder to figure out which component of the vector we are interested in
+	int component_index = index%4;
+	
+    float value = texelFetch(positionSampler, item_index)[component_index];
+    
+    return value;
+}
+
+void main(void)  
+{ 
+	// Since we are just transforming we don't need any fancy model/view matrix, just add to the vertex position
+	float x = vertex.x + positionFetch( int(vertex.z)*2 );
+	float y = vertex.y + positionFetch( int(vertex.z)*2 + 1);
+	vec3 real_position = vec3(x, y, 1);
+	 
+	gl_Position = vec4(projection * real_position, 1); 
+}
