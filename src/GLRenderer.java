@@ -26,21 +26,19 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 {
 	
 	private static final int MAX_INSTANCES = 100000;
+	private static final int BATCH_SIZE    = 512;
 	private static final int FLOAT_BYTES   = Float.SIZE / Byte.SIZE;
 	
+	// If fixedPipelineOnly is used then manuallyIndexVertices is always false and useTextureBuffer is ignored
 	private boolean fixedPipelineOnly;
 	
-	private static boolean manuallyIndexVertices; // Include an element index as the z-component with each vertex
+	// Include an element index as the z-component with each vertex
+	// Used for pseudo-instancing shaders
+	private static boolean manuallyIndexVertices; 
 	
-	private static boolean useTextureBuffer; // Batch position data into the texture buffer, this is the preferred option and allows for much larger batches than the alternate uniform buffer method
-	
-	// Valid Combinations:
-	//  fixedPipelineOnly / !manuallyIndexVertices / *                 - No instancing, no position batching, probably no shader support at all. useTextureBuffer is ignored.
-	// !fixedPipelineOnly / !manuallyIndexVertices / !useTextureBuffer - glDrawArraysInstanced is available but somehow the texture buffer is not. This will probably never happen, but there's no reason it shouldn't work.
-	// !fixedPipelineOnly / !manuallyIndexVertices / useTextureBuffer  - glDrawArraysInstanced is available as is the texture buffer, this is the best case scenario for rendering speed
-	// !fixedPipelineOnly /  manuallyIndexVertices / !useTextureBuffer - glDrawArraysInstanced is not available and neither is the texture buffer
-	// !fixedPipelineOnly /  manuallyIndexVertices / useTextureBuffer  - glDrawArraysInstanced is not available but the texture buffer is
-	// With any other combination behavior is undefined and you will get what you deserve.
+	// Batch position data into the texture buffer, this is the preferred option and allows for much larger batches than the alternate uniform array method
+	// Both methods require shader support.
+	private static boolean useTextureBuffer;
 	
 	public float viewWidth, viewHeight;
 	public float screenWidth, screenHeight;
@@ -60,6 +58,8 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	private ArrayList<Drawable> drawables          = new ArrayList<Drawable>();
 	private ArrayList<Geometry> instanceGeometries = new ArrayList<Geometry>();
 	private ArrayList<Movable[]> geometryInstances = new ArrayList<Movable[]>();
+	// only used when uniform array position batching is used (no texture buffer available)
+	private FloatBuffer positionBatchBuffer;
 	
 	private boolean didInit = false;
 	
@@ -97,7 +97,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
 		
 		fixedPipelineOnly = !gl.isFunctionAvailable("glCreateShader");
-		fixedPipelineOnly = true; // for testing
 		
 		System.out.println("Shaders enabled: " + !fixedPipelineOnly);
 		
@@ -130,7 +129,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		        }
 	        	else
 	        	{
-	        		instancingShaderProgram = ShaderLoader.compileProgram(gl, "pesudo_instancing_uniform");
+	        		instancingShaderProgram = ShaderLoader.compileProgram(gl, "pseudo_instancing_uniform");
 	        	}
 	        }
 	        gl.glLinkProgram(instancingShaderProgram);
@@ -138,15 +137,16 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	        // Grab references to the shader attributes
 	        projectionAttribute     = gl.glGetUniformLocation(instancingShaderProgram, "projection");
 	        vertexAttribute         = gl.glGetAttribLocation(instancingShaderProgram, "vertex");
-	        
+        	
 	        if(useTextureBuffer)
 	        {
-	        	positionAttribute       = gl.glGetUniformLocation(instancingShaderProgram, "positionSampler");
-	        	positionOffsetAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positionSamplerOffset");
+	        	positionAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positionSampler");
+	        	positionOffsetAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positionOffset");
 	        }
 	        else
 	        {
-	        	// TODO: Implement uniform array position batching
+	        	positionBatchBuffer = ByteBuffer.allocateDirect(BATCH_SIZE*2*FLOAT_BYTES).order(ByteOrder.nativeOrder()).asFloatBuffer();
+	        	positionAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positions");
 	        }
 	
 	        gl.glUseProgram(instancingShaderProgram);
@@ -154,10 +154,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	        if(useTextureBuffer)
 	        {
 	        	_preparePositionBuffer(gl);
-	        }
-	        else
-	        {
-	        	// TODO: Implement uniform array position batching
 	        }
 		}
 	}
@@ -226,9 +222,11 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 			if(!fixedPipelineOnly)
 			{
 				gl.glUseProgram(instancingShaderProgram);
-				_updatePositionBuffer(gl);
+				if(useTextureBuffer)
+				{
+					_updatePositionBufferTexture(gl);
+				}
 			}
-			
 			int offset = 0;
 			for(int g = 0; g < geometryInstances.size(); g++)
 			{
@@ -244,7 +242,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 					_compileGeometry(gl, geometry);
 				}
 				
-		    	currentlyBoundBuffer = geometry.vertexBufferID;
+				currentlyBoundBuffer = geometry.vertexBufferID;
 		    	gl.glBindBuffer(GL.GL_ARRAY_BUFFER, currentlyBoundBuffer);
 		    	
 		    	if(!manuallyIndexVertices)
@@ -253,28 +251,35 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 			    }
 				else 
 				{
-			    	// Pseudo instancing methods require an element index stored in the z-component of each vertex, so 3 floats are required
+			    	// Pseudo instancing requires an element index stored in the z-component of each vertex, so 3 floats are required
 					gl.glVertexPointer(3, GL.GL_FLOAT, 0, 0);
 				}
-
-		    	if(!fixedPipelineOnly)
-		    	{
-		    		gl.glUniform1i(positionOffsetAttribute, offset*2);
-		    	}
-		    	
-		    	if(!fixedPipelineOnly)
-		    	{
-			    	if(!manuallyIndexVertices)
+				
+				if(!fixedPipelineOnly && !useTextureBuffer)
+				{
+					// Using a uniform array for position data. Batching is required.
+					Movable[] instances = geometryInstances.get(g);
+					int b;
+					for(b = 0; b < geometry.num_instances/BATCH_SIZE; b++)
 					{
-			    		gl.glDrawArraysInstanced(GL2.GL_TRIANGLES, 0, geometry.vertices.length/2, geometry.num_instances);
+						_updatePositionBufferArray(gl, geometry, BATCH_SIZE, b*BATCH_SIZE);
+						_drawInstances(gl, geometry, BATCH_SIZE);
 					}
-					else
-					{
-						gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.num_instances*geometry.vertices.length/2);
-					}
+					
+					// Get the remainder
+					int num_remaining = geometry.num_instances - b*BATCH_SIZE;
+					_updatePositionBufferArray(gl, geometry, num_remaining, b*BATCH_SIZE);
+					_drawInstances(gl, geometry, num_remaining);
+				}
+				else if(!fixedPipelineOnly)
+		    	{
+					// Using the texture buffer, all the positons are already loaded and bound, just draw some instances
+			    	gl.glUniform1i(positionOffsetAttribute, offset*2);
+			    	_drawInstances(gl, geometry, geometry.num_instances);
 		    	}
 				else
 				{
+					// ewwwwww
 					Movable[] instances = geometryInstances.get(g);
 					for(int i = 0; i < geometry.num_instances; i++)
 					{
@@ -290,7 +295,33 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		}
 	}
 	
-	private void _updatePositionBuffer(GL2 gl)
+	private void _drawInstances(GL2 gl, Geometry g, int num_instances)
+	{
+		if(!manuallyIndexVertices)
+		{
+    		gl.glDrawArraysInstanced(GL2.GL_TRIANGLES, 0, g.vertices.length/2, num_instances);
+		}
+		else
+		{
+			gl.glDrawArrays(GL2.GL_TRIANGLES, 0, num_instances*g.vertices.length/2);
+		}
+	}
+	
+	private void _updatePositionBufferArray(GL2 gl, Geometry g, int batchSize, int batchOffset)
+	{
+		Movable[] instances = geometryInstances.get(g.geometryID);
+		
+		for(int i = 0; i < batchSize; i++)
+		{
+			positionBatchBuffer.put(instances[batchOffset+i].x);
+			positionBatchBuffer.put(instances[batchOffset+i].y);
+		}
+		positionBatchBuffer.position(0);
+		
+		gl.glUniform1fv(positionAttribute, batchSize*2, positionBatchBuffer);
+	}
+	
+	private void _updatePositionBufferTexture(GL2 gl)
 	{
 		gl.glBindBuffer(GL2.GL_TEXTURE_BUFFER, positionBufferID);
 		ByteBuffer textureBuffer = gl.glMapBuffer(GL2.GL_TEXTURE_BUFFER, GL2.GL_WRITE_ONLY);

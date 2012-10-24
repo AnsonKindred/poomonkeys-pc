@@ -2,12 +2,12 @@ uniform mat3 projection;
 attribute vec3 vertex;
 
 uniform samplerBuffer positionSampler;
-uniform int positionSamplerOffset;
+uniform int positionOffset;
 
 // Fetches the position from the texture buffer bound to positionSampler
 float positionFetch(int index)
 {
-	index = index + positionSamplerOffset;
+	index = index + positionOffset;
 	// each set of 4 position elements (2 xy pairs) is represented by a single RGBA vector
 	int item_index = int(index/4);
 	// use the remainder to figure out which component of the vector we are interested in
