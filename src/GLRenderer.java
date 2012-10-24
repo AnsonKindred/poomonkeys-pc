@@ -97,7 +97,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
 		
 		fixedPipelineOnly = !gl.isFunctionAvailable("glCreateShader");
-		//fixedPipelineOnly = true; // for testing
+		fixedPipelineOnly = true; // for testing
 		
 		System.out.println("Shaders enabled: " + !fixedPipelineOnly);
 		
@@ -280,7 +280,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 					{
 						gl.glPushMatrix();
 						gl.glTranslatef(instances[i].x, instances[i].y, 0);
-						gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.num_instances*geometry.vertices.length/2);
+						gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.vertices.length/2);
 						gl.glPopMatrix();
 					}
 				}
