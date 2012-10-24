@@ -12,8 +12,8 @@ import javax.media.opengl.GLEventListener;
 import javax.media.opengl.GLProfile;
 import javax.media.opengl.awt.GLCanvas;
 import javax.media.opengl.glu.GLU;
+
 import poomonkeys.common.Drawable;
-import poomonkeys.common.GameEngine;
 import poomonkeys.common.Geometry;
 import poomonkeys.common.Matrix3x3;
 import poomonkeys.common.Movable;
@@ -24,18 +24,23 @@ import com.jogamp.opengl.util.FPSAnimator;
 
 public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 {
-
-	private static final long serialVersionUID = -8513201172428486833L;
 	
 	private static final int MAX_INSTANCES = 100000;
 	private static final int FLOAT_BYTES   = Float.SIZE / Byte.SIZE;
 	
-	private static final int INSTANCING_DEFAULT = 0; // real instancing
-	private static final int INSTANCING_TEXTURE = 1; // use the texture buffer to do pseudo instancing
-	private static final int INSTANCING_UNIFORM = 2; // use uniforms to do pseudo instancing. Requires drawing many batches.
-	private static int instancingMode = INSTANCING_DEFAULT;
+	private boolean fixedPipelineOnly;
 	
-	String[] instancingShaders = {"default_instancing", "texture_instancing", "uniform_instancing"};
+	private static boolean manuallyIndexVertices; // Include an element index as the z-component with each vertex
+	
+	private static boolean useTextureBuffer; // Batch position data into the texture buffer, this is the preferred option and allows for much larger batches than the alternate uniform buffer method
+	
+	// Valid Combinations:
+	//  fixedPipelineOnly / !manuallyIndexVertices / *                 - No instancing, no position batching, probably no shader support at all. useTextureBuffer is ignored.
+	// !fixedPipelineOnly / !manuallyIndexVertices / !useTextureBuffer - glDrawArraysInstanced is available but somehow the texture buffer is not. This will probably never happen, but there's no reason it shouldn't work.
+	// !fixedPipelineOnly / !manuallyIndexVertices / useTextureBuffer  - glDrawArraysInstanced is available as is the texture buffer, this is the best case scenario for rendering speed
+	// !fixedPipelineOnly /  manuallyIndexVertices / !useTextureBuffer - glDrawArraysInstanced is not available and neither is the texture buffer
+	// !fixedPipelineOnly /  manuallyIndexVertices / useTextureBuffer  - glDrawArraysInstanced is not available but the texture buffer is
+	// With any other combination behavior is undefined and you will get what you deserve.
 	
 	public float viewWidth, viewHeight;
 	public float screenWidth, screenHeight;
@@ -59,7 +64,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	private boolean didInit = false;
 	
 	// Shader attributes
-	int defaultShaderProgram, instancingShaderProgram;
+	int defaultShaderProgram=-1, instancingShaderProgram;
 	int projectionAttribute, vertexAttribute, positionAttribute, positionOffsetAttribute, mvpAttribute;
 
 	public static GLRenderer getInstance()
@@ -88,40 +93,73 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		gl.glBlendFunc(GL2.GL_SRC_ALPHA, GL2.GL_ONE_MINUS_SRC_ALPHA);
 		gl.glEnable(GL2.GL_BLEND);
+
 		gl.glEnableClientState(GL2.GL_VERTEX_ARRAY);
 		
-		boolean VBOsupported = gl.isFunctionAvailable("glGenBuffersARB") &&
-                gl.isFunctionAvailable("glBindBufferARB") &&
-                gl.isFunctionAvailable("glBufferDataARB") &&
-                gl.isFunctionAvailable("glDeleteBuffersARB");
+		fixedPipelineOnly = !gl.isFunctionAvailable("glCreateShader");
+		//fixedPipelineOnly = true; // for testing
 		
-		System.out.println("VBO Supported: " + VBOsupported);
+		System.out.println("Shaders enabled: " + !fixedPipelineOnly);
 		
-		defaultShaderProgram = ShaderLoader.compileProgram(gl, "default");
-        gl.glLinkProgram(defaultShaderProgram);
-        
-        // Grab references to the shader attributes
-        mvpAttribute = gl.glGetUniformLocation(defaultShaderProgram, "mvp");
-		
-		instancingShaderProgram = ShaderLoader.compileProgram(gl, instancingShaders[instancingMode]);
-        gl.glLinkProgram(instancingShaderProgram);
-        // Grab references to the shader attributes
-        projectionAttribute     = gl.glGetUniformLocation(instancingShaderProgram, "projection");
-        vertexAttribute         = gl.glGetAttribLocation(instancingShaderProgram, "vertex");
-        switch(instancingMode)
-        {
-        	case INSTANCING_DEFAULT:
-        	case INSTANCING_TEXTURE:
-        		positionAttribute       = gl.glGetUniformLocation(instancingShaderProgram, "positionSampler");
-        		positionOffsetAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positionSamplerOffset");
-        		break;
-        	case INSTANCING_UNIFORM:
-        		break;
-        }
-        
-
-        gl.glUseProgram(instancingShaderProgram);
-        _preparePositionBuffer(gl);
+		if(!fixedPipelineOnly)
+		{
+			manuallyIndexVertices = !gl.isFunctionAvailable("glDrawArraysInstanced");
+			useTextureBuffer = gl.isFunctionAvailable("glTexBuffer");
+			
+			defaultShaderProgram = ShaderLoader.compileProgram(gl, "default");
+			gl.glLinkProgram(defaultShaderProgram);
+	        // Grab references to the shader attributes
+	        mvpAttribute = gl.glGetUniformLocation(defaultShaderProgram, "mvp");
+			
+	        if(!manuallyIndexVertices)
+	        {
+	        	if(useTextureBuffer)
+		        {
+		        	instancingShaderProgram = ShaderLoader.compileProgram(gl, "instancing_texture");
+		        }
+	        	else
+	        	{
+	        		instancingShaderProgram = ShaderLoader.compileProgram(gl, "instancing_uniform");
+	        	}
+	        }
+	        else
+	        {
+	        	if(useTextureBuffer)
+		        {
+		        	instancingShaderProgram = ShaderLoader.compileProgram(gl, "pseudo_instancing_texture");
+		        }
+	        	else
+	        	{
+	        		instancingShaderProgram = ShaderLoader.compileProgram(gl, "pesudo_instancing_uniform");
+	        	}
+	        }
+	        gl.glLinkProgram(instancingShaderProgram);
+	        
+	        // Grab references to the shader attributes
+	        projectionAttribute     = gl.glGetUniformLocation(instancingShaderProgram, "projection");
+	        vertexAttribute         = gl.glGetAttribLocation(instancingShaderProgram, "vertex");
+	        
+	        if(useTextureBuffer)
+	        {
+	        	positionAttribute       = gl.glGetUniformLocation(instancingShaderProgram, "positionSampler");
+	        	positionOffsetAttribute = gl.glGetUniformLocation(instancingShaderProgram, "positionSamplerOffset");
+	        }
+	        else
+	        {
+	        	// TODO: Implement uniform array position batching
+	        }
+	
+	        gl.glUseProgram(instancingShaderProgram);
+	        
+	        if(useTextureBuffer)
+	        {
+	        	_preparePositionBuffer(gl);
+	        }
+	        else
+	        {
+	        	// TODO: Implement uniform array position batching
+	        }
+		}
 	}
 	
 	/**
@@ -159,11 +197,15 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		final GL2 gl = d.getGL().getGL2();
 		timeSinceLastDraw = System.currentTimeMillis() - lastDrawTime;
 		lastDrawTime = System.currentTimeMillis();
+		
 		gl.glClear(GL2.GL_COLOR_BUFFER_BIT | GL2.GL_DEPTH_BUFFER_BIT);
 
 		synchronized(drawables)
 		{
-			gl.glUseProgram(defaultShaderProgram);
+			if(!fixedPipelineOnly)
+			{
+				gl.glUseProgram(defaultShaderProgram);
+			}
 			ListIterator<Drawable> itr = drawables.listIterator();
 			while(itr.hasNext())
 			{
@@ -181,9 +223,11 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 
 		synchronized(movableLock)
 		{
-			gl.glUseProgram(instancingShaderProgram);
-
-			_updatePositionBuffer(gl);
+			if(!fixedPipelineOnly)
+			{
+				gl.glUseProgram(instancingShaderProgram);
+				_updatePositionBuffer(gl);
+			}
 			
 			int offset = 0;
 			for(int g = 0; g < geometryInstances.size(); g++)
@@ -195,27 +239,50 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 					continue;
 				}
 				
+				if(geometry.hasChanged)
+				{
+					_compileGeometry(gl, geometry);
+				}
+				
 		    	currentlyBoundBuffer = geometry.vertexBufferID;
 		    	gl.glBindBuffer(GL.GL_ARRAY_BUFFER, currentlyBoundBuffer);
 		    	
-		    	if(instancingMode == INSTANCING_DEFAULT)
+		    	if(!manuallyIndexVertices)
 			    {
 					gl.glVertexPointer(2, GL.GL_FLOAT, 0, 0);
 			    }
 				else 
 				{
-			    	// Texture and uniform buffer methods require an element index stored in the z-component of each vertex, so 3 floats are required
+			    	// Pseudo instancing methods require an element index stored in the z-component of each vertex, so 3 floats are required
 					gl.glVertexPointer(3, GL.GL_FLOAT, 0, 0);
 				}
 
-		    	gl.glUniform1i(positionOffsetAttribute, offset*2);
-		    	if(instancingMode == INSTANCING_DEFAULT)
-				{
-		    		gl.glDrawArraysInstanced(GL2.GL_TRIANGLES, 0, geometry.vertices.length/2, geometry.num_instances);
-				}
+		    	if(!fixedPipelineOnly)
+		    	{
+		    		gl.glUniform1i(positionOffsetAttribute, offset*2);
+		    	}
+		    	
+		    	if(!fixedPipelineOnly)
+		    	{
+			    	if(!manuallyIndexVertices)
+					{
+			    		gl.glDrawArraysInstanced(GL2.GL_TRIANGLES, 0, geometry.vertices.length/2, geometry.num_instances);
+					}
+					else
+					{
+						gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.num_instances*geometry.vertices.length/2);
+					}
+		    	}
 				else
 				{
-					gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.num_instances*geometry.vertices.length/2);
+					Movable[] instances = geometryInstances.get(g);
+					for(int i = 0; i < geometry.num_instances; i++)
+					{
+						gl.glPushMatrix();
+						gl.glTranslatef(instances[i].x, instances[i].y, 0);
+						gl.glDrawArrays(GL2.GL_TRIANGLES, 0, geometry.num_instances*geometry.vertices.length/2);
+						gl.glPopMatrix();
+					}
 				}
 		    	
 		    	offset += geometry.num_instances;
@@ -234,11 +301,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 			Movable[] instances = geometryInstances.get(g);
 			Geometry geometry = instanceGeometries.get(g);
 			
-			if(geometry.hasChanged)
-			{
-				_compileGeometry(gl, geometry);
-			}
-			
 			for(int i = 0; i < geometry.num_instances; i++)
 			{
 				textureFloatBuffer.put(instances[i].x);
@@ -253,7 +315,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	{
 		geometry.buildGeometry(viewWidth, viewHeight);
 	    
-		if(instancingMode == INSTANCING_DEFAULT)
+		if(!manuallyIndexVertices)
 		{
 			_finalizeGeometry(gl, geometry);
 		}
@@ -288,7 +350,14 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		
 		gl.glUnmapBuffer(GL2.GL_ARRAY_BUFFER);
 		
-		gl.glVertexPointer(2, GL.GL_FLOAT, 0, 0);
+		if(fixedPipelineOnly)
+		{
+			gl.glVertexPointer(2, GL.GL_FLOAT, 0, 0);
+		}
+		else
+		{
+			gl.glVertexAttribPointer(vertexAttribute, 2, GL.GL_FLOAT, false, 0, 0);
+		}
 	}
 	
 	private void _finalizeGeometry(GL2 gl, Geometry g, int numInstances)
@@ -324,7 +393,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
         gl.glUnmapBuffer(GL2.GL_ARRAY_BUFFER);
         
         // Texture and uniform buffer methods require an element index stored in the z-component of each vertex, so 3 floats are required
-     	gl.glVertexPointer(3, GL.GL_FLOAT, 0, 0);
+     	gl.glVertexAttribPointer(vertexAttribute, 3, GL.GL_FLOAT, false, 0, 0);
 	}
 
 	private void _drawDrawable(Drawable thing, GL2 gl)
@@ -352,20 +421,37 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 			}*/
 		}
 		
-		Matrix3x3.push();
-
-		Matrix3x3.translate(thing.p[0], thing.p[1]);
-
-		if (thing.rotation != 0)
+		if(fixedPipelineOnly)
 		{
-			//gl.glRotatef(thing.rotation, 0, 0, 1);
-		}
-		if (thing.scale.x != 1 || thing.scale.y != 1)
-		{
-			//gl.glScalef(thing.scale.x, thing.scale.y, 0);
-		}
+			gl.glPushMatrix();
+			gl.glTranslatef(thing.p[0], thing.p[1], 0);
+			if (thing.rotation != 0)
+			{
+				gl.glRotatef(thing.rotation, 0, 0, 1);
+			}
+			if (thing.scale.x != 1 || thing.scale.y != 1)
+			{
+				gl.glScalef(thing.scale.x, thing.scale.y, 0);
+			}
 
-		gl.glUniformMatrix3fv(mvpAttribute, 1, false, Matrix3x3.getMatrix());
+		}
+		else
+		{
+			Matrix3x3.push();
+			Matrix3x3.translate(thing.p[0], thing.p[1]);
+
+			// Rotation and scaling not implemented...lol
+			if (thing.rotation != 0)
+			{
+				//gl.glRotatef(thing.rotation, 0, 0, 1);
+			}
+			if (thing.scale.x != 1 || thing.scale.y != 1)
+			{
+				//gl.glScalef(thing.scale.x, thing.scale.y, 0);
+			}
+	
+			gl.glUniformMatrix3fv(mvpAttribute, 1, false, Matrix3x3.getMatrix());
+		}
 		
 		if (thing.vertices != null)
 		{
@@ -375,9 +461,8 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		{
 			_render(gl, thing.geometry.drawMode, thing.geometry);
 		}
-
-		ListIterator<Drawable> itr = thing.drawables.listIterator();
 		
+		ListIterator<Drawable> itr = thing.drawables.listIterator();
 		while(itr.hasNext())
 		{
 			Drawable drawable = itr.next();
@@ -390,8 +475,15 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 				this._drawDrawable(drawable, gl);
 			}
 		}
-
-		Matrix3x3.pop();
+		
+		if(fixedPipelineOnly)
+		{
+			gl.glPopMatrix();
+		}
+		else
+		{
+			Matrix3x3.pop();
+		}
 	}
 	
 	public void _render(GL2 gl, int draw_mode, Geometry geometry)
@@ -444,12 +536,24 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		viewWidth = 100;
 		viewHeight = viewWidth * ratio;
 		
-		Matrix3x3.ortho(0, viewWidth, 0, viewHeight);
-
-		gl.glUseProgram(instancingShaderProgram);
-		// Send the projection matrix to the instancing shader, only needs to be sent once per resize
-        gl.glUniformMatrix3fv(projectionAttribute, 1, false, Matrix3x3.getMatrix());
-		gl.glUseProgram(defaultShaderProgram);
+		if(!fixedPipelineOnly)
+		{
+			Matrix3x3.ortho(0, viewWidth, 0, viewHeight);
+	
+			gl.glUseProgram(instancingShaderProgram);
+			// Send the projection matrix to the instancing shader, only needs to be sent once per resize
+	        gl.glUniformMatrix3fv(projectionAttribute, 1, false, Matrix3x3.getMatrix());
+			gl.glUseProgram(defaultShaderProgram);
+		}
+		else
+		{
+			gl.glMatrixMode(GL2.GL_PROJECTION);
+			gl.glLoadIdentity();
+			(new GLU()).gluOrtho2D(0, viewWidth, 0, viewHeight);
+			
+			gl.glMatrixMode(GL2.GL_MODELVIEW);
+			gl.glLoadIdentity();
+		}
         
 		if (!didInit)
 		{
