@@ -64,7 +64,7 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 
 	public PooMonkeysEngine()
 	{
-		renderer = GLRenderer.getInstance();
+		renderer = new GLRenderer();
 		renderer.addMouseListener(this);
 		renderer.addMouseMotionListener(this);
 		
@@ -130,7 +130,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 
 	public void fireShot() 
 	{
-		GLRenderer renderer = GLRenderer.getInstance();
 		gameState = STATE_FIRING_SHOT;
 		angleHUD.removeFromGLEngine = true;
 		Shot shot = new Shot(players.get(currentPlayer), 0, angleHUD.getPower(), renderer.viewWidth, renderer.viewHeight);
@@ -142,7 +141,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 
 	public void enemyFiredShot(int enemyID, float x, float y, float vx, float vy) 
 	{
-		GLRenderer renderer = GLRenderer.getInstance();
 		gameState = STATE_ENEMY_FIRING_SHOT;
 		Shot shot = new Shot(players.get(enemyID), 0, x, y, vx, vy, renderer.viewWidth, renderer.viewHeight);
 		players.get(enemyID).fireShot(shot);
@@ -163,7 +161,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 		float x = e.getX();
         float y = e.getY();
         float real_xy[] = {x, y};
-        GLRenderer renderer = GLRenderer.getInstance();
 		renderer.screenToViewCoords(real_xy);
 		if(gameState == STATE_CHOOSE_ANGLE) {
 			angleHUD.touch(real_xy[0], real_xy[1], renderer.viewWidth, renderer.viewHeight);
@@ -178,7 +175,6 @@ public class PooMonkeysEngine implements WindowListener, MouseListener, MouseMot
 		float x = e.getX();
         float y = e.getY();
 		float real_xy[] = {x, y};
-		GLRenderer renderer = GLRenderer.getInstance();
 		renderer.screenToViewCoords(real_xy);
 		switch(gameState)
 		{
