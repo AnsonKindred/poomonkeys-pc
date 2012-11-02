@@ -78,7 +78,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	private IntBuffer idBuffer = IntBuffer.allocate(1);
 	// only used when uniform array position batching is used (no texture buffer available)
 	private FloatBuffer positionBatchBuffer;
-	
 
 	// Buffers and shader attributes
 	private int currentlyBoundVertexBuffer = 0;
@@ -410,6 +409,7 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 	 */
 	private void _drawInstances(GL2 gl, Geometry g, int num_instances)
 	{
+		gl.glPolygonMode(GL2.GL_FRONT_AND_BACK, GL2.GL_LINE);
 		if(!manuallyIndexVertices)
 		{
     		gl.glDrawArraysInstanced(GL2.GL_TRIANGLES, 0, g.vertices.length/2, num_instances);
@@ -791,6 +791,17 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		}
 		return -1;
 	}
+
+	/**
+	 * Generate an unused id for a buffer on the graphics card
+	 * 
+	 * @return the id
+	 */
+	private int _generateBufferID(GL2 gl)
+	{
+		gl.glGenBuffers(1, idBuffer);
+		return idBuffer.get(0);
+	}
 	
 	@Override
 	public Geometry getGeometry(int id)
@@ -844,17 +855,6 @@ public class GLRenderer extends GLCanvas implements GLEventListener, Renderer
 		xy[1] = viewY;
 	}
 	
-	/**
-	 * Generate an unused id for a buffer on the graphics card
-	 * 
-	 * @return the id
-	 */
-	private int _generateBufferID(GL2 gl)
-	{
-		gl.glGenBuffers(1, idBuffer);
-		return idBuffer.get(0);
-	}
-
 	@Override
 	public void dispose(GLAutoDrawable drawable) {}
 }
